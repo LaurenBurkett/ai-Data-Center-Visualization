@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Frontier Data Centers</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #0d1117;
+    --surface: #161b22;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+    --accent:  #58a6ff;
+  }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; }
+  header { padding: 2rem 2rem 1rem; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text); }
+  header p  { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 1.25rem 2rem; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
+  .stat-card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.75rem; font-weight: 700; color: var(--accent); margin-top: 0.25rem; }
+  .stat-card .sub   { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+  section { padding: 0 2rem 1.5rem; }
+  section h2 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  #map { height: 520px; width: 100%; }
+  .charts-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.5rem; }
+  .chart-wrap { padding: 1.25rem; }
+  .chart-wrap canvas { max-height: 320px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead th { background: var(--bg); color: var(--muted); text-align: left; padding: 0.6rem 0.9rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:hover { background: rgba(88,166,255,0.05); }
+  tbody td { padding: 0.55rem 0.9rem; color: var(--text); vertical-align: middle; }
+  .owner-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .filter-bar { padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; }
+  .filter-bar input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.7rem; color: var(--text); font-size: 0.82rem; width: 220px; outline: none; }
+  .filter-bar input:focus { border-color: var(--accent); }
+  .filter-bar span { color: var(--muted); font-size: 0.8rem; }
+  .leaflet-popup-content-wrapper { background: #1c2128; border: 1px solid var(--border); color: var(--text); border-radius: 8px; }
+  .leaflet-popup-tip { background: #1c2128; }
+  .popup-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; }
+  .popup-row { font-size: 0.78rem; color: var(--muted); margin: 0.15rem 0; }
+  .popup-row span { color: var(--text); }
+  footer { padding: 1.5rem 2rem; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
+  footer a { color: var(--accent); text-decoration: none; }
+  @media (max-width: 900px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .charts-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    header, section { padding-left: 1rem; padding-right: 1rem; }
+    .stats { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Frontier Data Centers</h1>
+  <p>Epoch AI dataset — frontier AI compute facilities worldwide</p>
+</header>
+
+<div class="stats">
+  <div class="stat-card">
+    <div class="label">Total Facilities</div>
+    <div class="value" id="s-count">—</div>
+    <div class="sub">data centers tracked</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Total Compute</div>
+    <div class="value" id="s-h100">—</div>
+    <div class="sub">H100 GPU equivalents</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Total Power</div>
+    <div class="value" id="s-power">—</div>
+    <div class="sub">megawatts deployed</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Capital Invested</div>
+    <div class="value" id="s-cost">—</div>
+    <div class="sub">2025 USD billions</div>
+  </div>
+</div>
+
+<section>
+  <h2>Geographic Distribution</h2>
+  <div class="panel">
+    <div id="map"></div>
+  </div>
+</section>
+
+<section>
+  <div class="charts-row">
+    <div>
+      <h2>Compute Growth Over Time</h2>
+      <div class="panel">
+        <div class="chart-wrap">
+          <canvas id="timeline-chart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h2>Compute by Owner</h2>
+      <div class="panel">
+        <div class="chart-wrap">
+          <canvas id="owners-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>All Facilities</h2>
+  <div class="panel">
+    <div class="filter-bar">
+      <input id="search" type="text" placeholder="Filter by name, owner, or country…">
+      <span id="row-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="dc-table">
+        <thead>
+          <tr>
+            <th data-col="name">Name ↕</th>
+            <th data-col="owner">Owner ↕</th>
+            <th data-col="country">Country ↕</th>
+            <th data-col="power" style="text-align:right">Power (MW) ↕</th>
+            <th data-col="h100"  style="text-align:right">H100 Equiv ↕</th>
+            <th data-col="cost"  style="text-align:right">Cost ($B) ↕</th>
+          </tr>
+        </thead>
+        <tbody id="dc-body"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Data: <a href="https://epoch.ai/data/data-centers" target="_blank">Epoch AI — Frontier Data Centers</a> &nbsp;·&nbsp;
+  Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a> &nbsp;·&nbsp;
+  Last updated May 2026
+</footer>
+
+<script>
+const D = {"mapData":[{"name":"Colossus 2","owner":"SpaceXAI","country":"United States","lat":35.1495,"lng":-90.049,"power":1494.0,"h100":1389590.7023749368,"cost":43.545359,"color":"#c0c0c0","address":"5420 Tulane Rd, Memphis, TN 38109"},{"name":"Microsoft Fairwater Atlanta","owner":"Microsoft","country":"United States","lat":33.4418,"lng":-84.4549,"power":859.0,"h100":742799.393633148,"cost":24.092952,"color":"#00a4ef","address":"1435 Hwy 54 W, Fayetteville, GA 30214"},{"name":"Anthropic-Amazon New Carlisle","owner":"Amazon","country":"United States","lat":41.7056,"lng":-86.5014,"power":1092.0,"h100":687215.7655381506,"cost":34.47262,"color":"#ff9900","address":"55001 Larrison Blvd, New Carlisle, IN 46552"},{"name":"Meta Prometheus","owner":"Meta","country":"United States","lat":40.0814,"lng":-82.796,"power":731.0,"h100":677109.6513390602,"cost":21.289684,"color":"#1877f2","address":"1 Community Cir, New Albany, OH 43054"},{"name":"OpenAI Stargate Abilene","owner":"Oracle","country":"United States","lat":32.4487,"lng":-99.7331,"power":590.0,"h100":510358.7670540677,"cost":15.948322,"color":"#f05a22","address":"5502 Spinks Rd, Abilene, TX 79601"},{"name":"QTS Richmond","owner":"","country":"United States","lat":37.5243,"lng":-77.3191,"power":854.0,"h100":492167.7614957049,"cost":23.10802,"color":"#94a3b8","address":"6000 Technology Blvd, Sandston, VA 23150"},{"name":"Microsoft Fairwater Wisconsin","owner":"Microsoft","country":"United States","lat":42.7197,"lng":-87.8784,"power":442.0,"h100":445679.63617988885,"cost":13.978458,"color":"#00a4ef","address":"4800 90th St, Mount Pleasant, WI 53403"},{"name":"Google Pryor (North)","owner":"Google","country":"United States","lat":36.3042,"lng":-95.3169,"power":454.0,"h100":308236.4830722587,"cost":14.319396,"color":"#4285f4","address":"4581 Webb St, Pryor, OK 74361"},{"name":"DayOne Nusajaya","owner":"","country":"Malaysia","lat":3.139,"lng":101.6869,"power":336.0,"h100":281455.280444669,"cost":9.09168,"color":"#94a3b8","address":""},{"name":"Colossus 1","owner":"SpaceXAI","country":"United States","lat":35.1495,"lng":-90.049,"power":425.38,"h100":275795.85649317835,"cost":12.87988,"color":"#c0c0c0","address":"3231 Riverport Rd, Memphis, TN 38109"},{"name":"Google Columbus","owner":"Google","country":"United States","lat":39.9612,"lng":-82.9988,"power":364.0,"h100":215260.23244062657,"cost":11.478245999999999,"color":"#4285f4","address":"5076 S High St, Columbus, OH 43207"},{"name":"Amazon Madison Mega Site","owner":"Amazon","country":"United States","lat":32.61,"lng":-90.04,"power":341.0,"h100":214348.14354550533,"cost":10.758488,"color":"#ff9900","address":"Amazon Data Services Inc, Madison Mega Site Nissan Parkway and Highway 22 Canton, Mississippi Madison County"},{"name":"Google New Albany","owner":"Google","country":"United States","lat":40.0814,"lng":-82.796,"power":407.0,"h100":207175.3410813542,"cost":0.0,"color":"#4285f4","address":"1101 Beech Rd SW, New Albany, OH 43054"},{"name":"Microsoft Goodyear","owner":"Microsoft","country":"United States","lat":33.4353,"lng":-112.3576,"power":263.0,"h100":205145.18579951796,"cost":7.652164000000001,"color":"#00a4ef","address":"14250 W Broadway Rd, Goodyear, AZ 85338"},{"name":"Meta Temple","owner":"Meta","country":"United States","lat":31.0982,"lng":-97.3428,"power":198.0,"h100":173247.6719844078,"cost":5.758064,"color":"#1877f2","address":"2310 Eberhardt Rd, Temple, TX 76504"},{"name":"Amazon Ridgeland","owner":"Amazon","country":"United States","lat":32.4085,"lng":-90.1323,"power":273.0,"h100":171478.51483640424,"cost":8.637096,"color":"#ff9900","address":"1626 County Line Road Ridgeland, Mississippi"},{"name":"Microsoft Project Osmium","owner":"Microsoft","country":"United States","lat":41.4709,"lng":-93.7636,"power":228.0,"h100":151591.71298635675,"cost":7.19758,"color":"#00a4ef","address":"5855 SW Kerry St, Cumming, IA 50061"},{"name":"Google Omaha","owner":"Google","country":"United States","lat":41.2565,"lng":-95.9345,"power":284.0,"h100":135927.23597776654,"cost":8.978034,"color":"#4285f4","address":"11110 State St, Omaha, NE 68142"},{"name":"Alibaba Zhangbei","owner":"Alibaba","country":"China","lat":41.1,"lng":114.7,"power":203.0,"h100":132895.40171803941,"cost":6.402058,"color":"#ff6600","address":"Alibaba Zhangbei Yun Calculation Data Center, Zhangbei County, Zhangjiakou, Hebei, China, 076471"},{"name":"CoreWeave Denton TX","owner":"CoreWeave","country":"United States","lat":33.2148,"lng":-97.1331,"power":183.4,"h100":126326.42748863062,"cost":4.962542,"color":"#7c3aed","address":"8171 Jim Christal Rd, Denton, TX 76207"},{"name":"Google The Dalles","owner":"Google","country":"United States","lat":45.5946,"lng":-121.1787,"power":185.0,"h100":110156.6447700859,"cost":5.8338280000000005,"color":"#4285f4","address":"3500 River Rd, The Dalles, OR"},{"name":"Google Council Bluffs (East)","owner":"Google","country":"United States","lat":41.2619,"lng":-95.8608,"power":190.0,"h100":92470.94492167761,"cost":5.985356,"color":"#4285f4","address":"10410 Bunge Ave, Council Bluffs, IA 51503"},{"name":"Google Storey County","owner":"Google","country":"United States","lat":39.5,"lng":-98.35,"power":214.0,"h100":89439.11066195049,"cost":6.0990020000000005,"color":"#4285f4","address":""},{"name":"Oracle Batam","owner":"Oracle","country":"Indonesia","lat":-6.2088,"lng":106.8456,"power":94.0,"h100":84386.05356240526,"cost":2.7275039999999997,"color":"#f05a22","address":""},{"name":"Google Papillion","owner":"Google","country":"United States","lat":41.0197,"lng":-96.0447,"power":284.0,"h100":80343.60788276908,"cost":8.978034,"color":"#4285f4","address":"14651-15249 Gold Coast Rd 68138 Papillion Nebraska, USA"},{"name":"Fluidstack Lake Mariner","owner":"Fluidstack","country":"United States","lat":43.3292,"lng":-78.5417,"power":68.0,"h100":71753.4108135422,"cost":2.197156,"color":"#06b6d4","address":"7725 Lake Rd, Barker, NY 14012"},{"name":"Microsoft SAT40","owner":"Microsoft","country":"United States","lat":29.4241,"lng":-98.4936,"power":106.0,"h100":64679.13087417888,"cost":2.84115,"color":"#00a4ef","address":"15000 Lambda Drive, San Antonio, TX 78245"},{"name":"STACK Infrastructure NVA02","owner":"","country":"United States","lat":38.7509,"lng":-77.4753,"power":118.0,"h100":61141.99090449722,"cost":3.21997,"color":"#94a3b8","address":"9590 Hornbaker Rd, Manassas, VA 20109"},{"name":"Google Midlothian","owner":"Google","country":"United States","lat":32.4818,"lng":-97.0058,"power":82.0,"h100":56088.933804951994,"cost":2.613858,"color":"#4285f4","address":"3250 Railport Parkway, Midlothian, TX 76065"},{"name":"Google Red Oak","owner":"Google","country":"United States","lat":32.5165,"lng":-96.8047,"power":93.0,"h100":46791.30874178878,"cost":2.9169140000000002,"color":"#4285f4","address":"330 Austin Blvd, Red Oak, TX 75154"},{"name":"Stream Phoenix","owner":"","country":"United States","lat":33.42,"lng":-112.32,"power":77.0,"h100":46134.4113188479,"cost":2.424448,"color":"#94a3b8","address":"2950 S. Litchfield Road"},{"name":"Microsoft SAT14","owner":"Microsoft","country":"United States","lat":29.4241,"lng":-98.4936,"power":66.0,"h100":45174.33046993431,"cost":1.7804540000000002,"color":"#00a4ef","address":"3545 Wiseman Boulevard, San Antonio, TX 78251"},{"name":"Vantage TX1","owner":"","country":"United States","lat":33.4353,"lng":-112.3576,"power":44.8,"h100":38706.417382516425,"cost":1.212224,"color":"#94a3b8","address":"Goodyear, Arizona 85338"},{"name":"Start Campus Sines Data Campus","owner":"Nscale","country":"Portugal","lat":38.7169,"lng":-9.1399,"power":40.0,"h100":31834.259727134915,"cost":1.2501060000000002,"color":"#84cc16","address":"Start Campus - Sustainable Data Center Services, Sines, Portugal"},{"name":"Meta Hyperion","owner":"Meta","country":"United States","lat":32.6,"lng":-91.87,"power":0.0,"h100":0.0,"cost":0.0,"color":"#1877f2","address":"Holly Ridge, LA 71269"},{"name":"Goodnight","owner":"Google","country":"United States","lat":34.8834,"lng":-101.3648,"power":0.0,"h100":0.0,"cost":0.0,"color":"#4285f4","address":"10001 Lima Rd, Claude, TX 79019"},{"name":"OpenAI Stargate UAE","owner":"G42","country":"United Arab Emirates","lat":23.4241,"lng":53.8478,"power":0.0,"h100":0.0,"cost":0.0,"color":"#e67e22","address":"Nexus L&T Project Office, Al Bihouth, Al Dhafrah, Abu Dhabi, United Arab Emirates"},{"name":"Coreweave Helios","owner":"Coreweave","country":"United States","lat":33.1701,"lng":-101.0541,"power":0.0,"h100":0.0,"cost":0.0,"color":"#7c3aed","address":"984 County Road 112, Afton, TX 79920"},{"name":"Google Cedar Rapids","owner":"Google","country":"United States","lat":41.9779,"lng":-91.6656,"power":0.0,"h100":0.0,"cost":0.0,"color":"#4285f4","address":"5800 EDGEWOOD RD SW CEDAR RAPIDS, IA 52404"},{"name":"QTS Cedar Rapids","owner":"","country":"United States","lat":41.9247,"lng":-91.7808,"power":0.0,"h100":0.0,"cost":0.0,"color":"#94a3b8","address":"6200 76th Ave SW, Fairfax, IA 52228"},{"name":"OpenAI Stargate Shackelford","owner":"Oracle","country":"United States","lat":32.4487,"lng":-99.7331,"power":0.0,"h100":0.0,"cost":0.0,"color":"#f05a22","address":"175 Private Road 1604, Abilene, TX 79601, Shackelford County"},{"name":"Google Fort Wayne","owner":"Google","country":"United States","lat":41.0793,"lng":-85.1394,"power":0.0,"h100":0.0,"cost":0.0,"color":"#4285f4","address":"6015 Adams Center Road, Fort Wayne, IN 46806"},{"name":"Crusoe Abilene Expansion","owner":"Microsoft","country":"United States","lat":32.4487,"lng":-99.7331,"power":0.0,"h100":0.0,"cost":0.0,"color":"#00a4ef","address":"5502 Spinks Rd, Abilene, TX 79601"},{"name":"OpenAI Stargate Lordstown","owner":"Softbank","country":"United States","lat":41.2373,"lng":-80.8184,"power":0.0,"h100":0.0,"cost":0.0,"color":"#cc0033","address":"2300 Hallock Young Rd, Warren, OH 44481"},{"name":"OpenAI Stargate New Mexico","owner":"Oracle","country":"United States","lat":39.5,"lng":-98.35,"power":0.0,"h100":0.0,"cost":0.0,"color":"#f05a22","address":""},{"name":"OpenAI Stargate Wisconsin","owner":"Oracle","country":"United States","lat":39.5,"lng":-98.35,"power":0.0,"h100":0.0,"cost":0.0,"color":"#f05a22","address":""},{"name":"OpenAI Stargate Michigan","owner":"Oracle","country":"United States","lat":39.5,"lng":-98.35,"power":0.0,"h100":0.0,"cost":0.0,"color":"#f05a22","address":""},{"name":"OpenAI Stargate Milam","owner":"Softbank","country":"United States","lat":39.5,"lng":-98.35,"power":0.0,"h100":0.0,"cost":0.0,"color":"#cc0033","address":""},{"name":"Meta Kuna","owner":"Meta","country":"United States","lat":43.4921,"lng":-116.4202,"power":0.0,"h100":0.0,"cost":0.0,"color":"#1877f2","address":"601 Kuna Mora Rd,  Kuna ID 83634"},{"name":"Google Kansas City East","owner":"Google","country":"United States","lat":39.5,"lng":-98.35,"power":0.0,"h100":0.0,"cost":0.0,"color":"#4285f4","address":""}],"tlLabels":["2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08","2026-09","2026-10","2026-11","2026-12","2027-01","2027-02","2027-03","2027-04","2027-05","2027-06"],"tlH100":[0,0,0,0,0,0,0,0,0,0,0,0,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,3941,24912,24912,24912,54063,54063,86756,86756,120308,139712,139712,139712,139712,139712,139712,192163,243451,275841,288828,306766,410695,576700,576700,652041,746079,775230,1029651,876442,934553,1037837,1662948,1938744,2132379,2499917,3342262,3601403,4105929,4740936,4948920,5248768,6013650,8760025,9461978,9564050,9769412,10291533,11171775,12677154,13199134,13283520,13836830,14032383,14032383,14143045],"tlCutoff":77,"owLabels":["SpaceXAI","Microsoft","Google","Amazon","Unknown","Meta","Oracle","Alibaba","CoreWeave","Fluidstack","Nscale","G42"],"owH100":[1665387,1655069,1341890,1073042,919606,850357,594745,132895,126326,71753,31834,0],"owPower":[1919,1964,2557,1706,1430,929,684,203,183,68,40,0],"owCost":[56.4,57.5,67.2,53.9,39.1,27.0,18.7,6.4,5.0,2.2,1.3,0.0],"owColors":["#c0c0c0","#00a4ef","#4285f4","#ff9900","#94a3b8","#1877f2","#f05a22","#ff6600","#7c3aed","#06b6d4","#84cc16","#e67e22"],"totalH100":8462905.721319951,"totalPower":11683.58,"totalCost":334.630647,"totalCount":50};
+
+// ── Stats ──────────────────────────────────────────────────────────────────────
+function fmtH100(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return Math.round(n/1e3) + 'K';
+  return Math.round(n).toString();
+}
+document.getElementById('s-count').textContent = D.totalCount;
+document.getElementById('s-h100').textContent  = fmtH100(D.totalH100);
+document.getElementById('s-power').textContent = Math.round(D.totalPower).toLocaleString() + ' MW';
+document.getElementById('s-cost').textContent  = '$' + D.totalCost.toFixed(0) + 'B';
+
+// ── Map ────────────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([38, -96], 4);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd', maxZoom: 19,
+}).addTo(map);
+
+const minR = 5, maxR = 40;
+const powers = D.mapData.map(d => d.power).filter(p => p > 0);
+const pMax = Math.max(...powers);
+
+D.mapData.forEach(d => {
+  if (!d.lat || !d.lng) return;
+  const r = d.power > 0 ? minR + (maxR - minR) * Math.sqrt(d.power / pMax) : minR;
+  const circle = L.circleMarker([d.lat, d.lng], {
+    radius: r, color: d.color, fillColor: d.color,
+    fillOpacity: 0.6, weight: 1.5,
+  }).addTo(map);
+  circle.bindPopup(`
+    <div class="popup-name">${d.name}</div>
+    <div class="popup-row">Owner &nbsp;<span>${d.owner || '—'}</span></div>
+    <div class="popup-row">Country &nbsp;<span>${d.country}</span></div>
+    <div class="popup-row">Power &nbsp;<span>${d.power.toLocaleString()} MW</span></div>
+    <div class="popup-row">H100 equiv &nbsp;<span>${fmtH100(d.h100)}</span></div>
+    <div class="popup-row">Capital cost &nbsp;<span>$${d.cost.toFixed(1)}B</span></div>
+    <div class="popup-row" style="margin-top:0.35rem;font-size:0.72rem">${d.address}</div>
+  `);
+});
+
+// ── Timeline chart ─────────────────────────────────────────────────────────────
+const tlCtx = document.getElementById('timeline-chart').getContext('2d');
+const cutoff = D.tlCutoff;
+const actualH100    = D.tlH100.slice(0, cutoff + 1).concat(D.tlH100.slice(cutoff + 1).map(() => null));
+const projectedH100 = D.tlH100.slice(0, cutoff).map(() => null).concat(D.tlH100.slice(cutoff));
+
+new Chart(tlCtx, {
+  type: 'line',
+  data: {
+    labels: D.tlLabels,
+    datasets: [
+      {
+        label: 'Actual compute (H100 eq)',
+        data: actualH100,
+        borderColor: '#58a6ff',
+        backgroundColor: 'rgba(88,166,255,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        spanGaps: false,
+      },
+      {
+        label: 'Projected',
+        data: projectedH100,
+        borderColor: '#58a6ff',
+        backgroundColor: 'rgba(88,166,255,0.03)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        borderDash: [6, 4],
+        spanGaps: false,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+      tooltip: {
+        backgroundColor: '#1c2128',
+        borderColor: '#30363d',
+        borderWidth: 1,
+        titleColor: '#e6edf3',
+        bodyColor: '#8b949e',
+        callbacks: {
+          label: ctx => ' ' + fmtH100(ctx.parsed.y) + ' H100 eq',
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#8b949e', maxRotation: 45, font: { size: 10 }, maxTicksLimit: 16 },
+        grid:  { color: 'rgba(48,54,61,0.6)' },
+      },
+      y: {
+        ticks: { color: '#8b949e', font: { size: 10 }, callback: v => fmtH100(v) },
+        grid:  { color: 'rgba(48,54,61,0.6)' },
+      },
+    },
+  },
+});
+
+// ── Owners chart ───────────────────────────────────────────────────────────────
+const owCtx = document.getElementById('owners-chart').getContext('2d');
+new Chart(owCtx, {
+  type: 'bar',
+  data: {
+    labels: D.owLabels,
+    datasets: [{
+      label: 'H100 equivalents',
+      data: D.owH100,
+      backgroundColor: D.owColors.map(c => c + 'cc'),
+      borderColor: D.owColors,
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1c2128',
+        borderColor: '#30363d',
+        borderWidth: 1,
+        titleColor: '#e6edf3',
+        bodyColor: '#8b949e',
+        callbacks: {
+          label: ctx => ' ' + fmtH100(ctx.parsed.x) + ' H100 eq',
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#8b949e', font: { size: 10 }, callback: v => fmtH100(v) },
+        grid:  { color: 'rgba(48,54,61,0.6)' },
+      },
+      y: {
+        ticks: { color: '#e6edf3', font: { size: 11 } },
+        grid:  { display: false },
+      },
+    },
+  },
+});
+
+// ── Data table ─────────────────────────────────────────────────────────────────
+let tableData = [...D.mapData];
+let sortCol = 'h100', sortDir = -1;
+
+function numFmt(n, decimals = 0) {
+  if (!n) return '—';
+  return decimals > 0 ? n.toFixed(decimals) : n.toLocaleString();
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('dc-body');
+  tbody.innerHTML = rows.map(d => `
+    <tr>
+      <td>${d.name}</td>
+      <td><span class="owner-dot" style="background:${d.color}"></span>${d.owner || '—'}</td>
+      <td>${d.country}</td>
+      <td style="text-align:right">${numFmt(d.power)}</td>
+      <td style="text-align:right">${fmtH100(d.h100)}</td>
+      <td style="text-align:right">${d.cost ? '$' + d.cost.toFixed(1) + 'B' : '—'}</td>
+    </tr>
+  `).join('');
+  document.getElementById('row-count').textContent = rows.length + ' facilities';
+}
+
+function applySort() {
+  tableData.sort((a, b) => {
+    const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+    if (typeof av === 'number') return sortDir * (av - bv);
+    return sortDir * av.toString().localeCompare(bv.toString());
+  });
+}
+
+function refresh() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  let rows = q
+    ? tableData.filter(d =>
+        d.name.toLowerCase().includes(q) ||
+        (d.owner || '').toLowerCase().includes(q) ||
+        d.country.toLowerCase().includes(q)
+      )
+    : tableData;
+  renderTable(rows);
+}
+
+document.querySelectorAll('thead th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    sortDir = (col === sortCol) ? -sortDir : -1;
+    sortCol = col;
+    applySort();
+    refresh();
+  });
+});
+
+document.getElementById('search').addEventListener('input', refresh);
+
+applySort();
+refresh();
+</script>
+</body>
+</html>
